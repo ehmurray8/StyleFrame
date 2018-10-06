@@ -1,5 +1,5 @@
-import unittest
 import os
+import unittest
 
 from StyleFrame import CommandLineInterface, Styler, utils
 from StyleFrame.command_line.tests import TEST_JSON_FILE, TEST_JSON_STRING_FILE
@@ -10,11 +10,14 @@ class CommandlineInterfaceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.cli = CommandLineInterface(TEST_JSON_FILE, TEST_FILENAME)
-        cls.sheet_1_col_a_style = Styler(bg_color=utils.colors.blue, font_color=utils.colors.yellow).to_openpyxl_style()
+        cls.sheet_1_col_a_style = Styler(bg_color=utils.colors.blue, font_color=utils.colors.yellow)\
+            .to_openpyxl_style()
         cls.sheet_1_col_a_cell_2_style = Styler(bold=True, font=utils.fonts.arial, font_size=30,
                                                 font_color=utils.colors.green,
-                                                border_type=utils.borders.double).to_openpyxl_style()
-        cls.sheet_1_col_b_cell_4_style = Styler(bold=True, font=utils.fonts.arial, font_size=16).to_openpyxl_style()
+                                                border_type=utils.borders.double)\
+            .to_openpyxl_style()
+        cls.sheet_1_col_b_cell_4_style = Styler(bold=True, font=utils.fonts.arial, font_size=16)\
+            .to_openpyxl_style()
 
     def tearDown(self):
         try:
@@ -28,8 +31,10 @@ class CommandlineInterfaceTest(unittest.TestCase):
         loc_col_a = self.cli.Sheet1_sf.columns.get_loc('col_a')
         loc_col_b = self.cli.Sheet1_sf.columns.get_loc('col_b')
         self.assertEqual(self.cli.Sheet1_sf.iloc[0, loc_col_a].style.to_openpyxl_style(), self.sheet_1_col_a_style)
-        self.assertEqual(self.cli.Sheet1_sf.iloc[1, loc_col_a].style.to_openpyxl_style(), self.sheet_1_col_a_cell_2_style)
-        self.assertEqual(self.cli.Sheet1_sf.iloc[1, loc_col_b].style.to_openpyxl_style(), self.sheet_1_col_b_cell_4_style)
+        self.assertEqual(self.cli.Sheet1_sf.iloc[1, loc_col_a].style.to_openpyxl_style(),
+                         self.sheet_1_col_a_cell_2_style)
+        self.assertEqual(self.cli.Sheet1_sf.iloc[1, loc_col_b].style.to_openpyxl_style(),
+                         self.sheet_1_col_b_cell_4_style)
 
     # noinspection PyUnresolvedReferences
     def test_init_with_json_string(self):

@@ -1,4 +1,5 @@
 import re
+import json
 from openpyxl.styles import colors as op_colors
 
 HEX_REGEX = re.compile(r'^([A-Fa-f0-9]{8}|[A-Fa-f0-9]{6})$')
@@ -136,3 +137,29 @@ class conditional_formatting_types(BaseDefClass):
     min = 'min'
     formula = 'formula'
     percentile = 'percentile'
+
+
+def style_str_to_dict(style_string):
+    style_string = style_string.replace("'", '"')
+    style_string = style_string.replace("None", 'null')
+    style_string = style_string.replace("True", 'true')
+    style_string = style_string.replace("False", 'false')
+    return json.loads(style_string)
+
+
+def dict_to_style_str(style_dict):
+    style_string = json.dumps(style_dict)
+    style_string = style_string.replace('"', "'")
+    style_string = style_string.replace("null", "None")
+    style_string = style_string.replace("true", "True")
+    style_string = style_string.replace("false", "False")
+    return style_string
+
+
+def add_comments(style_str, read_comments, column_cell):
+    if read_comments and column_cell.comment is not None:
+        style_dict = style_str_to_dict(style_str)
+        style_dict["comment_author"] = column_cell.comment.author
+        style_dict["comment_text"] = column_cell.comment.content
+        style_str = dict_to_style_str(style_dict)
+    return style_str

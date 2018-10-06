@@ -1,10 +1,13 @@
 # coding:utf-8
-from . import utils
-from colour import Color
-from openpyxl.formatting import ColorScaleRule
-from openpyxl.styles import PatternFill, Style, Color as OpenPyColor, Border, Side, Font, Alignment, Protection
-from openpyxl.comments import Comment
+import json
 from pprint import pformat
+
+from colour import Color
+from openpyxl.comments import Comment
+from openpyxl.formatting.rule import ColorScaleRule
+from openpyxl.styles import PatternFill, NamedStyle, Color as OpenPyColor, Border, Side, Font, Alignment, Protection
+
+from . import utils
 
 
 class Styler(object):
@@ -13,6 +16,7 @@ class Styler(object):
     """
 
     cache = {}
+    style_count = 0
 
     def __init__(self, bg_color=None, bold=False, font=utils.fonts.arial, font_size=12, font_color=None,
                  number_format=utils.number_formats.general, protection=False, underline=None,
@@ -74,20 +78,27 @@ class Styler(object):
         return cls(bold=True)
 
     def to_openpyxl_style(self):
+        name = str(self)
         try:
-            openpyxl_style = self.cache[self]
+            openpyxl_style = self.cache[name]
         except KeyError:
             side = Side(border_style=self.border_type, color=utils.colors.black)
             border = Border(left=side, right=side, top=side, bottom=side)
-            openpyxl_style = self.cache[self] = Style(font=Font(name=self.font, size=self.font_size, color=OpenPyColor(self.font_color),
-                                                      bold=self.bold, underline=self.underline),
-                                                      fill=PatternFill(patternType=self.fill_pattern_type, fgColor=self.bg_color),
-                                                      alignment=Alignment(horizontal=self.horizontal_alignment, vertical=self.vertical_alignment,
-                                                                          wrap_text=self.wrap_text, shrink_to_fit=self.shrink_to_fit,
-                                                                          indent=self.indent),
-                                                      border=border,
-                                                      number_format=self.number_format,
-                                                      protection=Protection(locked=self.protection))
+            openpyxl_style = self.cache[name] = NamedStyle(name=name,
+                                                           font=Font(name=self.font, size=self.font_size,
+                                                                     color=OpenPyColor(self.font_color),
+                                                                     bold=self.bold,
+                                                                     underline=self.underline),
+                                                           fill=PatternFill(patternType=self.fill_pattern_type,
+                                                                            fgColor=self.bg_color),
+                                                           alignment=Alignment(horizontal=self.horizontal_alignment,
+                                                                               vertical=self.vertical_alignment,
+                                                                               wrap_text=self.wrap_text,
+                                                                               shrink_to_fit=self.shrink_to_fit,
+                                                                               indent=self.indent),
+                                                           border=border,
+                                                           number_format=self.number_format,
+                                                           protection=Protection(locked=self.protection))
         return openpyxl_style
 
     @classmethod
@@ -105,48 +116,53 @@ class Styler(object):
                 return current_lum
             return current_lum * (1.0 + color_tint)
 
-        bg_color = openpyxl_style.fill.fgColor.rgb
+        if isinstance(openpyxl_style, NamedStyle):
+            openpyxl_style = openpyxl_style.name
+        style_json = utils.style_str_to_dict(openpyxl_style)
+        bg_color = style_json["bg_color"]
 
         # in case we are dealing with a "theme color"
         if not isinstance(bg_color, str):
-            try:
-                bg_color = theme_colors[openpyxl_style.fill.fgColor.theme]
-            except (AttributeError, IndexError, TypeError):
-                bg_color = utils.colors.white[:6]
-            tint = openpyxl_style.fill.fgColor.tint
-            bg_color = _calc_new_hex_from_theme_hex_and_tint(bg_color, tint)
+            raise NotImplementedError("Themes not implemented yet.")
+            # try:
+            #     bg_color = theme_colors[openpyxl_style.fill.fgColor.theme]
+            # except (AttributeError, IndexError, TypeError):
+            #     bg_color = utils.colors.white[:6]
+            # tint = openpyxl_style.fill.fgColor.tint
+            # bg_color = _calc_new_hex_from_theme_hex_and_tint(bg_color, tint)
 
-        bold = openpyxl_style.font.bold
-        font = openpyxl_style.font.name
-        font_size = openpyxl_style.font.size
-        font_color = openpyxl_style.font.color.rgb
+        bold = style_json["bold"]
+        font = style_json["font"]
+        font_size = style_json["font_size"]
+        font_color = style_json["font_color"]
 
         # in case we are dealing with a "theme color"
         if not isinstance(font_color, str):
-            try:
-                font_color = theme_colors[openpyxl_style.font.color.theme]
-            except (AttributeError, IndexError, TypeError):
-                font_color = utils.colors.black[:6]
-            tint = openpyxl_style.font.color.tint
-            font_color = _calc_new_hex_from_theme_hex_and_tint(font_color, tint)
+            raise NotImplementedError("Themes not implemented yet.")
+            # try:
+            #     font_color = theme_colors[openpyxl_style.font.color.theme]
+            # except (AttributeError, IndexError, TypeError):
+            #     font_color = utils.colors.black[:6]
+            # tint = openpyxl_style.font.color.tint
+            # font_color = _calc_new_hex_from_theme_hex_and_tint(font_color, tint)
 
-        number_format = openpyxl_style.number_format
-        protection = openpyxl_style.protection.locked
-        underline = openpyxl_style.font.underline
-        border_type = openpyxl_style.border.bottom.border_style
-        horizontal_alignment = openpyxl_style.alignment.horizontal
-        vertical_alignment = openpyxl_style.alignment.vertical
-        wrap_text = openpyxl_style.alignment.wrap_text or False
-        shrink_to_fit = openpyxl_style.alignment.shrink_to_fit
-        fill_pattern_type = openpyxl_style.fill.patternType
-        indent = openpyxl_style.alignment.indent
+        number_format = style_json["number_format"]
+        protection = style_json["protection"]
+        underline = style_json["underline"]
+        border_type = style_json["border_type"]
+        horizontal_alignment = style_json["horizontal_alignment"]
+        vertical_alignment = style_json["vertical_alignment"]
+        wrap_text = style_json["wrap_text"]
+        shrink_to_fit = style_json["shrink_to_fit"]
+        fill_pattern_type = style_json["fill_pattern_type"]
+        indent = style_json["indent"]
 
         if openpyxl_comment:
             comment_author = openpyxl_comment.author
             comment_text = openpyxl_comment.text
         else:
-            comment_author = None
-            comment_text = None
+            comment_author = style_json["comment_author"]
+            comment_text = style_json["comment_text"]
 
         return cls(bg_color, bold, font, font_size, font_color,
                    number_format, protection, underline,
@@ -165,6 +181,7 @@ class ColorScaleConditionalFormatRule(object):
     """Creates a color scale conditional format rule. Wraps openpyxl's ColorScaleRule.
     Mostly should not be used directly, but through StyleFrame.add_color_scale_conditional_formatting
     """
+
     def __init__(self, start_type, start_value, start_color, end_type, end_value, end_color,
                  mid_type=None, mid_value=None, mid_color=None, columns_range=None):
 

@@ -9,8 +9,9 @@ from .deprecations import deprecated_kwargs
 from . import utils
 from copy import deepcopy
 from collections import Iterable
-from openpyxl import cell, load_workbook
+from openpyxl import load_workbook
 from openpyxl.xml.functions import fromstring, QName
+from openpyxl.utils import get_column_letter
 
 PY2 = sys.version_info[0] == 2
 
@@ -34,8 +35,8 @@ try:
 except AttributeError:
     pd_timestamp = pd.tslib.Timestamp
 
-str_type = basestring if PY2 else str
-unicode_type = unicode if PY2 else str
+str_type = np.basestring if PY2 else str
+unicode_type = np.unicode if PY2 else str
 
 
 class StyleFrame(object):
@@ -131,14 +132,15 @@ class StyleFrame(object):
         if column_to_convert in self.data_df.columns:  # column name
             column_index = self.data_df.columns.get_loc(
                 column_to_convert) + startcol + 1  # worksheet columns index start from 1
-            column_as_letter = cell.get_column_letter(column_index)
+            column_as_letter = get_column_letter(column_index)
 
         elif isinstance(column_to_convert, int) and column_to_convert >= 1:  # column index
-            column_as_letter = cell.get_column_letter(startcol + column_to_convert)
+            column_as_letter = get_column_letter(startcol + column_to_convert)
         elif column_to_convert in sheet.column_dimensions:  # column letter
             column_as_letter = column_to_convert
 
-        if column_as_letter is None or column_as_letter not in sheet.column_dimensions:
+        sheet_columns = set([cell.column for _, cell in sheet._cells.items()])
+        if column_as_letter is None or column_as_letter not in sheet_columns:
             raise IndexError("column: %s is out of columns range." % column_to_convert)
 
         return column_as_letter
@@ -182,18 +184,19 @@ class StyleFrame(object):
         def _read_style():
             wb = load_workbook(path)
             if isinstance(sheet_name, (str_type, unicode_type)):
-                sheet = wb.get_sheet_by_name(sheet_name)
+                sheet = wb[sheet_name]
             elif isinstance(sheet_name, int):
                 sheet = wb.worksheets[sheet_name]
             else:
                 raise TypeError("'sheet_name' must be a string or int, got {} instead".format(type(sheet_name)))
+
             theme_colors = _get_scheme_colors_from_excel(wb)
             for col_index, col_name in enumerate(sf.columns, start=1):
                 column_cell = sheet.cell(row=1, column=col_index)
+
                 if use_openpyxl_styles:
                     style_object = column_cell.style
-                    if read_comments:
-                        style_object.comment = column_cell.comment
+                    style_object = utils.add_comments(style_object, read_comments, column_cell)
                 else:
                     style_object = Styler.from_openpyxl_style(column_cell.style, theme_colors,
                                                               read_comments and column_cell.comment)
@@ -202,8 +205,7 @@ class StyleFrame(object):
                     current_cell = sheet.cell(row=row_index, column=col_index)
                     if use_openpyxl_styles:
                         style_object = current_cell.style
-                        if read_comments:
-                            style_object.comment = current_cell.comment
+                        style_object = utils.add_comments(style_object, read_comments, column_cell)
                     else:
                         style_object = Styler.from_openpyxl_style(current_cell.style, theme_colors,
                                                                   read_comments and current_cell.comment)
@@ -312,7 +314,7 @@ class StyleFrame(object):
         export_df.to_excel(excel_writer, sheet_name=sheet_name, engine='openpyxl', header=header,
                            index=index, startcol=startcol, startrow=startrow, na_rep=na_rep, **kwargs)
 
-        sheet = excel_writer.book.get_sheet_by_name(sheet_name)
+        sheet = excel_writer.book[sheet_name]
 
         sheet.sheet_view.rightToLeft = right_to_left
 
@@ -391,8 +393,10 @@ class StyleFrame(object):
             column_letter = self._get_column_as_letter(sheet, column, startcol)
             sheet.column_dimensions[column_letter].width = self._columns_width[column]
 
+        sheet_rows = set([cell.row for _, cell in sheet._cells.items()])
+        sheet_columns = set([cell.column for _, cell in sheet._cells.items()])
         for row in self._rows_height:
-            if row + startrow in sheet.row_dimensions:
+            if row + startrow in sheet_rows:
                 sheet.row_dimensions[startrow + row].height = self._rows_height[row]
             else:
                 raise IndexError('row: {} is out of range'.format(row))
@@ -400,7 +404,7 @@ class StyleFrame(object):
         if row_to_add_filters is not None:
             try:
                 row_to_add_filters = int(row_to_add_filters)
-                if (row_to_add_filters + startrow + 1) not in sheet.row_dimensions:
+                if (row_to_add_filters + startrow + 1) not in sheet_rows:
                     raise IndexError('row: {} is out of rows range'.format(row_to_add_filters))
                 sheet.auto_filter.ref = get_range_of_cells(row_index=row_to_add_filters)
             except (TypeError, ValueError):
@@ -409,9 +413,9 @@ class StyleFrame(object):
         if columns_and_rows_to_freeze is not None:
             if not isinstance(columns_and_rows_to_freeze, (str_type, unicode_type)) or len(columns_and_rows_to_freeze) < 2:
                 raise TypeError("columns_and_rows_to_freeze must be a str for example: 'C3'")
-            if columns_and_rows_to_freeze[0] not in sheet.column_dimensions:
+            if columns_and_rows_to_freeze[0] not in sheet_columns:
                 raise IndexError("column: %s is out of columns range." % columns_and_rows_to_freeze[0])
-            if int(columns_and_rows_to_freeze[1]) not in sheet.row_dimensions:
+            if int(columns_and_rows_to_freeze[1]) not in sheet_rows:
                 raise IndexError("row: %s is out of rows range." % columns_and_rows_to_freeze[1])
             sheet.freeze_panes = sheet[columns_and_rows_to_freeze]
 
@@ -421,12 +425,14 @@ class StyleFrame(object):
 
         # Iterating over the columns_to_hide and check if the format is columns name, column index as number or letter
         if columns_to_hide:
-            if not isinstance(columns_to_hide, (list, set, tuple)):
-                columns_to_hide = [columns_to_hide]
+            pass
+            # raise NotImplementedError("Hiding columns has not been implemented yet.")
+            # if not isinstance(columns_to_hide, (list, set, tuple)):
+            #     columns_to_hide = [columns_to_hide]
 
-            for column in columns_to_hide:
-                column_letter = self._get_column_as_letter(sheet, column, startcol)
-                sheet.column_dimensions[column_letter].hidden = True
+            # for column in columns_to_hide:
+            #     column_letter = self._get_column_as_letter(sheet, column, startcol)
+            #     sheet.column_dimensions[column_letter].hidden = True
 
         for cond_formatting in self._cond_formatting:
                 sheet.conditional_formatting.add(get_range_of_cells(columns=cond_formatting.columns),
@@ -724,3 +730,4 @@ class StyleFrame(object):
                                                                      columns_range=columns_range))
 
         return self
+
